@@ -19,12 +19,11 @@ pub use client::*;
 pub use configuration::*;
 use either::Either;
 pub use field::*;
-pub use function::*;
-use internal_baml_schema_ast::ast::{FieldType, Identifier, TopId, WithName};
+pub use function::{FunctionWalker, ClientSpec};
+pub use template_string::TemplateStringWalker;
+use internal_baml_schema_ast::ast::{FieldType, Identifier, TopId, TypeExpId, WithName};
 pub use r#class::*;
 pub use r#enum::*;
-
-pub use self::template_string::TemplateStringWalker;
 
 /// A generic walker. Only walkers intantiated with a concrete ID type (`I`) are useful.
 #[derive(Clone, Copy)]
@@ -127,6 +126,11 @@ impl<'db> crate::ParserDatabase {
             .and_then(|name_id| self.names.tops.get(&name_id))
             .and_then(|top_id| top_id.as_retry_policy_id())
             .map(|model_id| self.walk((model_id, "retry_policy")))
+    }
+
+    /// Returns a set of all classes that are part of some recursive definition.
+    pub fn finite_recursive_cycles(&self) -> &[Vec<TypeExpId>] {
+        &self.types.finite_recursive_cycles
     }
 
     /// Traverse a schema element by id.

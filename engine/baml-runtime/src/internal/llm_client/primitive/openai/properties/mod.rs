@@ -3,9 +3,8 @@ pub(crate) mod generic;
 pub(crate) mod ollama;
 pub(crate) mod openai;
 
+use crate::internal::llm_client::{AllowedMetadata, SupportedRequestModes};
 use std::collections::HashMap;
-
-use crate::internal::llm_client::AllowedMetadata;
 
 pub struct PostRequestProperties {
     pub default_role: String,
@@ -17,4 +16,5 @@ pub struct PostRequestProperties {
     // These are passed directly to the OpenAI API.
     pub properties: HashMap<String, serde_json::Value>,
     pub allowed_metadata: AllowedMetadata,
+    pub supported_request_modes: SupportedRequestModes,
 }

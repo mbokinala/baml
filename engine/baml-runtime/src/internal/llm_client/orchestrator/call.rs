@@ -39,7 +39,12 @@ pub async fn orchestrate(
         let prompt = match node.render_prompt(ir, prompt, ctx, params).await {
             Ok(p) => p,
             Err(e) => {
-                results.push((node.scope, LLMResponse::InternalFailure(e.to_string()), None, None));
+                results.push((
+                    node.scope,
+                    LLMResponse::InternalFailure(e.to_string()),
+                    None,
+                    None,
+                ));
                 continue;
             }
         };
@@ -51,7 +56,7 @@ pub async fn orchestrate(
 
         let sleep_duration = node.error_sleep_duration().cloned();
         let (parsed_response, response_with_constraints) = match parsed_response {
-                Some(Ok(v)) => (Some(Ok(v.clone())), Some(parsed_value_to_response(&v))),
+                Some(Ok(v)) => (Some(Ok(v.clone())), Some(Ok(parsed_value_to_response(&v)))),
                 Some(Err(e)) => (None, Some(Err(e))),
                 None => (None, None),
             };

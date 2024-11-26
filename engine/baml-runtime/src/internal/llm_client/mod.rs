@@ -5,6 +5,7 @@ pub mod llm_provider;
 pub mod orchestrator;
 pub mod primitive;
 
+mod properties_hander;
 pub mod retry_policy;
 mod strategy;
 pub mod traits;
@@ -26,10 +27,10 @@ use wasm_bindgen::JsValue;
 pub type ResponseBamlValue = BamlValueWithMeta<Vec<ResponseCheck>>;
 
 /// Validate a parsed value, checking asserts and checks.
-pub fn parsed_value_to_response(baml_value: &BamlValueWithFlags) -> Result<ResponseBamlValue> {
+pub fn parsed_value_to_response(baml_value: &BamlValueWithFlags) -> ResponseBamlValue {
     let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
         baml_value.clone().into();
-    Ok(baml_value_with_meta.map_meta(|cs| {
+    baml_value_with_meta.map_meta(|cs| {
         cs.iter()
             .map(|(label, expr, result)| {
                 let status = (if *result { "succeeded" } else { "failed" }).to_string();
@@ -40,7 +41,7 @@ pub fn parsed_value_to_response(baml_value: &BamlValueWithFlags) -> Result<Respo
                 }
             })
             .collect()
-    }))
+    })
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -85,6 +86,12 @@ pub enum AllowedMetadata {
     #[serde(rename = "none")]
     None,
     Only(HashSet<String>),
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SupportedRequestModes {
+    // If unset, treat as auto
+    pub stream: Option<bool>,
 }
 
 impl AllowedMetadata {
@@ -371,9 +378,9 @@ impl crate::tracing::Visualize for LLMErrorResponse {
 fn resolve_properties_walker(
     client: &ClientWalker,
     ctx: &crate::RuntimeContext,
-) -> Result<std::collections::HashMap<String, serde_json::Value>> {
+) -> Result<properties_hander::PropertiesHandler> {
     use anyhow::Context;
-    (&client.item.elem.options)
+    let result = (&client.item.elem.options)
         .iter()
         .map(|(k, v)| {
             Ok((
@@ -386,5 +393,7 @@ fn resolve_properties_walker(
                     ))?,
             ))
         })
-        .collect::<Result<std::collections::HashMap<_, _>>>()
+        .collect::<Result<std::collections::HashMap<_, _>>>()?;
+
+    Ok(properties_hander::PropertiesHandler::new(result))
 }

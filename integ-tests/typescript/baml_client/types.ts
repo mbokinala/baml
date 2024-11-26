@@ -89,8 +89,18 @@ export enum EnumInClass {
   TWO = "TWO",
 }
 
+/**
+ * An enum with three values,
+ * ONE, TWO and THREE.
+ */
 export enum EnumOutput {
+  /**
+   * The first enum.
+   */
   ONE = "ONE",
+  /**
+   * The second enum.
+   */
   TWO = "TWO",
   THREE = "THREE",
 }
@@ -99,6 +109,12 @@ export enum Hobby {
   SPORTS = "SPORTS",
   MUSIC = "MUSIC",
   READING = "READING",
+}
+
+export enum MapKey {
+  A = "A",
+  B = "B",
+  C = "C",
 }
 
 export enum NamedArgsSingleEnum {
@@ -143,6 +159,13 @@ export enum TestEnum {
 export interface BigNumbers {
   a: number
   b: number
+  
+}
+
+export interface BinaryNode {
+  data: number
+  left?: BinaryNode | null
+  right?: BinaryNode | null
   
 }
 
@@ -297,6 +320,11 @@ export interface FooAny {
   
 }
 
+export interface Forest {
+  trees: Tree[]
+  
+}
+
 export interface GroceryReceipt {
   receiptId: string
   storeName: string
@@ -330,6 +358,12 @@ export interface InputClassNested {
   
 }
 
+export interface LinkedList {
+  head?: Node | null
+  len: number
+  
+}
+
 export interface LiteralClassHello {
   prop: "hello"
   
@@ -355,7 +389,15 @@ export interface MalformedConstraints2 {
   
 }
 
+/**
+ * A Martian organism with an age.
+ * Such a nice type.
+ */
 export interface Martian {
+  /**
+   * The age of the Martian in Mars years.
+   * So many Mars years.
+   */
   age: Checked<number,"young_enough">
   
 }
@@ -387,6 +429,12 @@ export interface NestedBlockConstraint {
 
 export interface NestedBlockConstraintForParam {
   nbcfp: BlockConstraintForParam
+  
+}
+
+export interface Node {
+  data: number
+  next?: Node | null
   
 }
 
@@ -532,6 +580,12 @@ export interface TestClassWithEnum {
 export interface TestOutputClass {
   prop1: string
   prop2: number
+  
+}
+
+export interface Tree {
+  data: number
+  children: Forest
   
 }
 

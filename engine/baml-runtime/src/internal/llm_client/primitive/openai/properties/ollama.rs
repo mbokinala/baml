@@ -2,57 +2,32 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 
-use crate::{internal::llm_client::AllowedMetadata, RuntimeContext};
+use crate::{
+    internal::llm_client::{properties_hander::PropertiesHandler, AllowedMetadata},
+    RuntimeContext,
+};
 
 use super::PostRequestProperties;
 
 pub fn resolve_properties(
-    mut properties: HashMap<String, serde_json::Value>,
+    mut properties: PropertiesHandler,
     ctx: &RuntimeContext,
 ) -> Result<PostRequestProperties> {
-    let default_role = properties
-        .remove("default_role")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "system".to_string());
-
+    let default_role = properties.pull_default_role("system")?;
     let base_url = properties
-        .remove("base_url")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .pull_base_url()?
         .unwrap_or_else(|| "http://localhost:11434/v1".to_string());
-    let allowed_metadata = match properties.remove("allowed_role_metadata") {
-        Some(allowed_metadata) => serde_json::from_value(allowed_metadata)
-            .context("allowed_role_metadata must be an array of keys. For example: ['key1', 'key2']")?,
-        None => AllowedMetadata::None,
-    };
+    let allowed_metadata = properties.pull_allowed_role_metadata()?;
+    let headers = properties.pull_headers()?;
 
-    let headers = properties.remove("headers").map(|v| {
-        if let Some(v) = v.as_object() {
-            v.iter()
-                .map(|(k, v)| {
-                    Ok((
-                        k.to_string(),
-                        match v {
-                            serde_json::Value::String(s) => s.to_string(),
-                            _ => anyhow::bail!("Header '{k}' must be a string"),
-                        },
-                    ))
-                })
-                .collect::<Result<HashMap<String, String>>>()
-        } else {
-            Ok(Default::default())
-        }
-    });
-    let headers = match headers {
-        Some(h) => h?,
-        None => Default::default(),
-    };
+    let supported_request_modes = properties.pull_supported_request_modes()?;
 
     Ok(PostRequestProperties {
         default_role,
         base_url,
         api_key: None,
         headers,
-        properties,
+        properties: properties.finalize(),
         allowed_metadata,
         proxy_url: ctx
             .env
@@ -60,5 +35,6 @@ pub fn resolve_properties(
             .map(|s| Some(s.to_string()))
             .unwrap_or(None),
         query_params: Default::default(),
+        supported_request_modes,
     })
 }

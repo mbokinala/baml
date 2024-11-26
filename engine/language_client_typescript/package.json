@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.66.0",
+  "version": "0.68.0",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
@@ -29,10 +29,7 @@
     "./stream.d.ts",
     "./stream.js",
     "./type_builder.d.ts",
-    "./type_builder.js",
-    "./checked.js",
-    "./checked.d.ts",
-    "./checked.d.ts.map"
+    "./type_builder.js"
   ],
   "main": "./index.js",
   "types": "./index.d.ts",
@@ -40,7 +37,6 @@
     "binaryName": "baml",
     "targets": [
       "aarch64-apple-darwin",
-      "aarch64-pc-windows-msvc",
       "aarch64-unknown-linux-gnu",
       "aarch64-unknown-linux-musl",
       "x86_64-apple-darwin",

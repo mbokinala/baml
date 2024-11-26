@@ -3,15 +3,16 @@ use std::collections::HashSet;
 use anyhow::{anyhow, Result};
 use baml_types::{Constraint, ConstraintLevel, FieldType};
 use either::Either;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use internal_baml_parser_database::{
     walkers::{
         ClassWalker, ClientSpec as AstClientSpec, ClientWalker, ConfigurationWalker,
         EnumValueWalker, EnumWalker, FieldWalker, FunctionWalker, TemplateStringWalker,
+        Walker as AstWalker,
     },
     Attributes, ParserDatabase, PromptAst, RetryPolicyStrategy,
 };
-use internal_baml_schema_ast::ast::SubType;
+use internal_baml_schema_ast::ast::{SubType, ValExpId};
 
 use baml_types::JinjaExpression;
 use internal_baml_schema_ast::ast::{self, FieldArity, WithName, WithSpan};
@@ -27,6 +28,8 @@ use crate::Configuration;
 pub struct IntermediateRepr {
     enums: Vec<Node<Enum>>,
     classes: Vec<Node<Class>>,
+    /// Strongly connected components of the dependency graph (finite cycles).
+    finite_recursive_cycles: Vec<IndexSet<String>>,
     functions: Vec<Node<Function>>,
     clients: Vec<Node<Client>>,
     retry_policies: Vec<Node<RetryPolicy>>,
@@ -50,6 +53,7 @@ impl IntermediateRepr {
         IntermediateRepr {
             enums: vec![],
             classes: vec![],
+            finite_recursive_cycles: vec![],
             functions: vec![],
             clients: vec![],
             retry_policies: vec![],
@@ -62,14 +66,37 @@ impl IntermediateRepr {
         &self.configuration
     }
 
-    pub fn required_env_vars(&self) -> HashSet<&str> {
+    pub fn required_env_vars(&self) -> HashSet<String> {
         // TODO: We should likely check the full IR.
+        let mut env_vars = HashSet::new();
 
-        self.clients
-            .iter()
-            .flat_map(|c| c.elem.options.iter())
-            .flat_map(|(_, expr)| expr.required_env_vars())
-            .collect::<HashSet<&str>>()
+        for client in self.walk_clients() {
+            client.required_env_vars().iter().for_each(|v| {
+                env_vars.insert(v.to_string());
+            });
+        }
+
+        // self.walk_functions().filter_map(
+        //     |f| f.client_name()
+        // ).map(|c| c.required_env_vars())
+
+        // // for any functions, check for shorthand env vars
+        // self.functions
+        //     .iter()
+        //     .filter_map(|f| f.elem.configs())
+        //     .into_iter()
+        //     .flatten()
+        //     .flat_map(|(expr)| expr.client.required_env_vars())
+        //     .collect()
+        env_vars
+    }
+
+    /// Returns a list of all the recursive cycles in the IR.
+    ///
+    /// Each cycle is represented as a set of strings, where each string is the
+    /// name of a class.
+    pub fn finite_recursive_cycles(&self) -> &[IndexSet<String>] {
+        &self.finite_recursive_cycles
     }
 
     pub fn walk_enums<'a>(&'a self) -> impl ExactSizeIterator<Item = Walker<'a, &'a Node<Enum>>> {
@@ -139,6 +166,15 @@ impl IntermediateRepr {
                 .walk_classes()
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
+            finite_recursive_cycles: db
+                .finite_recursive_cycles()
+                .iter()
+                .map(|ids| {
+                    ids.iter()
+                        .map(|id| db.ast()[*id].name().to_string())
+                        .collect()
+                })
+                .collect(),
             functions: db
                 .walk_functions()
                 .map(|e| e.node(db))
@@ -312,7 +348,6 @@ fn type_with_arity(t: FieldType, arity: &FieldArity) -> FieldType {
 }
 
 impl WithRepr<FieldType> for ast::FieldType {
-
     // TODO: (Greg) This code only extracts constraints, and ignores any
     // other types of attributes attached to the type directly.
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
@@ -323,20 +358,29 @@ impl WithRepr<FieldType> for ast::FieldType {
                 let level = match attr.name.to_string().as_str() {
                     "assert" => Some(ConstraintLevel::Assert),
                     "check" => Some(ConstraintLevel::Check),
-                    _ => None
+                    _ => None,
                 }?;
                 let (label, expression) = match attr.arguments.arguments.as_slice() {
                     [arg1, arg2] => match (arg1.clone().value, arg2.clone().value) {
-                        (ast::Expression::Identifier(ast::Identifier::Local(s, _)), ast::Expression::JinjaExpressionValue(j,_)) => Some((Some(s), j)),
-                        _ => None
+                        (
+                            ast::Expression::Identifier(ast::Identifier::Local(s, _)),
+                            ast::Expression::JinjaExpressionValue(j, _),
+                        ) => Some((Some(s), j)),
+                        _ => None,
                     },
                     [arg1] => match arg1.clone().value {
-                        ast::Expression::JinjaExpressionValue(JinjaExpression(j),_) => Some((None, JinjaExpression(j.clone()))),
-                        _ => None
-                    }
+                        ast::Expression::JinjaExpressionValue(JinjaExpression(j), _) => {
+                            Some((None, JinjaExpression(j.clone())))
+                        }
+                        _ => None,
+                    },
                     _ => None,
                 }?;
-                Some(Constraint{ level, expression, label })
+                Some(Constraint {
+                    level,
+                    expression,
+                    label,
+                })
             })
             .collect::<Vec<Constraint>>();
         let attributes = NodeAttributes {
@@ -378,7 +422,7 @@ impl WithRepr<FieldType> for ast::FieldType {
                                 base: Box::new(base_class),
                                 constraints,
                             },
-                            _ => base_class
+                            _ => base_class,
                         }
                     }
                     Some(Either::Right(enum_walker)) => {
@@ -387,9 +431,9 @@ impl WithRepr<FieldType> for ast::FieldType {
                         match maybe_constraints {
                             Some(constraints) if constraints.len() > 0 => FieldType::Constrained {
                                 base: Box::new(base_type),
-                                constraints
+                                constraints,
                             },
-                            _ => base_type
+                            _ => base_type,
                         }
                     }
                     None => return Err(anyhow!("Field type uses unresolvable local identifier")),
@@ -438,7 +482,10 @@ impl WithRepr<FieldType> for ast::FieldType {
         };
 
         let with_constraints = if has_constraints {
-            FieldType::Constrained { base: Box::new(base.clone()), constraints }
+            FieldType::Constrained {
+                base: Box::new(base.clone()),
+                constraints,
+            }
         } else {
             base
         };
@@ -483,9 +530,9 @@ pub enum Expression {
 }
 
 impl Expression {
-    pub fn required_env_vars(&self) -> Vec<&str> {
+    pub fn required_env_vars<'a>(&'a self) -> Vec<String> {
         match self {
-            Expression::Identifier(Identifier::ENV(k)) => vec![k.as_str()],
+            Expression::Identifier(Identifier::ENV(k)) => vec![k.to_string()],
             Expression::List(l) => l.iter().flat_map(Expression::required_env_vars).collect(),
             Expression::Map(m) => m
                 .iter()
@@ -575,6 +622,7 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
                             .map(|f| Field {
                                 name: id.name().to_string(),
                                 r#type: f,
+                                docstring: None,
                             })
                             .ok()
                     })
@@ -592,7 +640,9 @@ pub struct EnumValue(pub String);
 #[derive(serde::Serialize, Debug)]
 pub struct Enum {
     pub name: EnumId,
-    pub values: Vec<Node<EnumValue>>,
+    pub values: Vec<(Node<EnumValue>, Option<Docstring>)>,
+    /// Docstring.
+    pub docstring: Option<Docstring>,
 }
 
 impl WithRepr<EnumValue> for EnumValueWalker<'_> {
@@ -629,16 +679,24 @@ impl WithRepr<Enum> for EnumWalker<'_> {
             name: self.name().to_string(),
             values: self
                 .values()
-                .map(|v| v.node(db))
-                .collect::<Result<Vec<_>>>()?,
+                .map(|w| {
+                    w.node(db)
+                        .map(|v| (v, w.documentation().map(|s| Docstring(s.to_string()))))
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            docstring: self.get_documentation().map(|s| Docstring(s)),
         })
     }
 }
 
 #[derive(serde::Serialize, Debug)]
+pub struct Docstring(pub String);
+
+#[derive(serde::Serialize, Debug)]
 pub struct Field {
     pub name: String,
     pub r#type: Node<FieldType>,
+    pub docstring: Option<Docstring>,
 }
 
 impl WithRepr<Field> for FieldWalker<'_> {
@@ -668,6 +726,7 @@ impl WithRepr<Field> for FieldWalker<'_> {
                     .repr(db)?,
                 attributes: self.attributes(db),
             },
+            docstring: self.get_documentation().map(|s| Docstring(s)),
         })
     }
 }
@@ -685,6 +744,9 @@ pub struct Class {
 
     /// Parameters to the class definition.
     pub inputs: Vec<(String, FieldType)>,
+
+    /// Docstring.
+    pub docstring: Option<Docstring>,
 }
 
 impl WithRepr<Class> for ClassWalker<'_> {
@@ -718,6 +780,7 @@ impl WithRepr<Class> for ClassWalker<'_> {
                     .collect::<Result<Vec<_>>>()?,
                 None => Vec::new(),
             },
+            docstring: self.get_documentation().map(|s| Docstring(s)),
         })
     }
 }
@@ -828,22 +891,31 @@ pub struct FunctionConfig {
 #[derive(serde::Serialize, Clone, Debug)]
 pub enum ClientSpec {
     Named(String),
-    Shorthand(String),
+    /// Shorthand for "<provider>/<model>"
+    Shorthand(String, String),
 }
 
 impl ClientSpec {
-    pub fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> String {
         match self {
-            ClientSpec::Named(n) => n,
-            ClientSpec::Shorthand(n) => n,
+            ClientSpec::Named(n) => n.clone(),
+            ClientSpec::Shorthand(provider, model) => format!("{provider}/{model}"),
         }
     }
 
     pub fn new_from_id(arg: String) -> Self {
         if arg.contains("/") {
-            ClientSpec::Shorthand(arg)
+            let (provider, model) = arg.split_once("/").unwrap();
+            ClientSpec::Shorthand(provider.to_string(), model.to_string())
         } else {
             ClientSpec::Named(arg)
+        }
+    }
+
+    pub fn required_env_vars(&self) -> HashSet<String> {
+        match self {
+            ClientSpec::Named(n) => HashSet::new(),
+            ClientSpec::Shorthand(_, _) => HashSet::new(),
         }
     }
 }
@@ -852,7 +924,7 @@ impl From<AstClientSpec> for ClientSpec {
     fn from(spec: AstClientSpec) -> Self {
         match spec {
             AstClientSpec::Named(n) => ClientSpec::Named(n.to_string()),
-            AstClientSpec::Shorthand(n) => ClientSpec::Shorthand(n.to_string()),
+            AstClientSpec::Shorthand(provider, model) => ClientSpec::Shorthand(provider, model),
         }
     }
 }
@@ -1044,14 +1116,23 @@ pub struct TestCase {
     pub name: String,
     pub functions: Vec<Node<TestCaseFunction>>,
     pub args: IndexMap<String, Expression>,
+    pub constraints: Vec<Constraint>,
 }
 
 impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         let span = self.0.test_case().functions[self.1].1.clone();
+        let constraints = self
+            .0
+            .test_case()
+            .constraints
+            .iter()
+            .map(|(c, _, _)| c)
+            .cloned()
+            .collect();
         NodeAttributes {
             meta: IndexMap::new(),
-            constraints: Vec::new(),
+            constraints,
             span: Some(span),
         }
     }
@@ -1065,10 +1146,17 @@ impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
 
 impl WithRepr<TestCase> for ConfigurationWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
+        let constraints = self
+            .test_case()
+            .constraints
+            .iter()
+            .map(|(c, _, _)| c)
+            .cloned()
+            .collect();
         NodeAttributes {
             meta: IndexMap::new(),
             span: Some(self.span().clone()),
-            constraints: Vec::new(),
+            constraints,
         }
     }
 
@@ -1085,6 +1173,12 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
                 .map(|(k, (_, v))| Ok((k.clone(), v.repr(db)?)))
                 .collect::<Result<IndexMap<_, _>>>()?,
             functions,
+            constraints: <AstWalker<'_, (ValExpId, &str)> as WithRepr<TestCase>>::attributes(
+                self, db,
+            )
+            .constraints
+            .into_iter()
+            .collect::<Vec<_>>(),
         })
     }
 }
@@ -1128,18 +1222,122 @@ impl WithRepr<Prompt> for PromptAst<'_> {
 /// Generate an IntermediateRepr from a single block of BAML source code.
 /// This is useful for generating IR test fixtures.
 pub fn make_test_ir(source_code: &str) -> anyhow::Result<IntermediateRepr> {
-    use std::path::PathBuf;
-    use internal_baml_diagnostics::SourceFile;
-    use crate::ValidatedSchema;
     use crate::validate;
+    use crate::ValidatedSchema;
+    use internal_baml_diagnostics::SourceFile;
+    use std::path::PathBuf;
 
     let path: PathBuf = "fake_file.baml".into();
     let source_file: SourceFile = (path.clone(), source_code).into();
     let validated_schema: ValidatedSchema = validate(&path, vec![source_file]);
     let diagnostics = &validated_schema.diagnostics;
     if diagnostics.has_errors() {
-        return Err(anyhow::anyhow!("Source code was invalid: \n{:?}", diagnostics.errors()))
+        return Err(anyhow::anyhow!(
+            "Source code was invalid: \n{:?}",
+            diagnostics.errors()
+        ));
     }
-    let ir = IntermediateRepr::from_parser_database(&validated_schema.db, validated_schema.configuration)?;
+    let ir = IntermediateRepr::from_parser_database(
+        &validated_schema.db,
+        validated_schema.configuration,
+    )?;
     Ok(ir)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::ir_helpers::IRHelper;
+
+    #[test]
+    fn test_docstrings() {
+        let ir = make_test_ir(
+            r#"
+          /// Foo class.
+          class Foo {
+            /// Bar field.
+            bar string
+
+            /// Baz field.
+            baz int
+          }
+
+          /// Test enum.
+          enum TestEnum {
+            /// First variant.
+            FIRST
+
+            /// Second variant.
+            SECOND
+
+            THIRD
+          }
+        "#,
+        )
+        .unwrap();
+
+        // Test class docstrings
+        let foo = ir.find_class("Foo").as_ref().unwrap().clone().elem();
+        assert_eq!(foo.docstring.as_ref().unwrap().0.as_str(), "Foo class.");
+        match foo.static_fields.as_slice() {
+            [field1, field2] => {
+                assert_eq!(field1.elem.docstring.as_ref().unwrap().0, "Bar field.");
+                assert_eq!(field2.elem.docstring.as_ref().unwrap().0, "Baz field.");
+            }
+            _ => {
+                panic!("Expected 2 fields");
+            }
+        }
+
+        // Test enum docstrings
+        let test_enum = ir.find_enum("TestEnum").as_ref().unwrap().clone().elem();
+        assert_eq!(
+            test_enum.docstring.as_ref().unwrap().0.as_str(),
+            "Test enum."
+        );
+        match test_enum.values.as_slice() {
+            [val1, val2, val3] => {
+                assert_eq!(val1.0.elem.0, "FIRST");
+                assert_eq!(val1.1.as_ref().unwrap().0, "First variant.");
+                assert_eq!(val2.0.elem.0, "SECOND");
+                assert_eq!(val2.1.as_ref().unwrap().0, "Second variant.");
+                assert_eq!(val3.0.elem.0, "THIRD");
+                assert!(val3.1.is_none());
+            }
+            _ => {
+                panic!("Expected 3 enum values");
+            }
+        }
+    }
+
+    #[test]
+    fn test_block_attributes() {
+        let ir = make_test_ir(
+            r##"
+            client<llm> GPT4 {
+              provider openai
+              options {
+                model gpt-4o
+                api_key env.OPENAI_API_KEY
+              }
+            }
+            function Foo(a: int) -> int {
+              client GPT4
+              prompt #"Double the number {{ a }}"#
+            }
+
+            test Foo() {
+              functions [Foo]
+              args {
+                a 10
+              }
+              @@assert( {{ result == 20 }} )
+            }
+        "##,
+        )
+        .unwrap();
+        let function = ir.find_function("Foo").unwrap();
+        let walker = ir.find_test(&function, "Foo").unwrap();
+        assert_eq!(walker.item.1.elem.constraints.len(), 1);
+    }
 }

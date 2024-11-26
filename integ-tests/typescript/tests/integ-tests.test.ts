@@ -14,6 +14,7 @@ import {
   TestClassNested,
   onLogEvent,
   AliasedEnum,
+  MapKey,
 } from '../baml_client'
 import { RecursivePartialNull } from '../baml_client/async_client'
 import { b as b_sync } from '../baml_client/sync_client'
@@ -129,6 +130,23 @@ describe('Integ tests', () => {
     it('single map string to map', async () => {
       const res = await b.TestFnNamedArgsSingleMapStringToMap({ lorem: { word: 'ipsum' }, dolor: { word: 'sit' } })
       expect(res).toHaveProperty('lorem', { word: 'ipsum' })
+    })
+
+    it('enum key in map', async () => {
+      const res = await b.InOutEnumMapKey({ [MapKey.A]: 'A' }, { [MapKey.B]: 'B' })
+      expect(res).toHaveProperty(MapKey.A, 'A')
+      expect(res).toHaveProperty(MapKey.B, 'B')
+    })
+
+    it('literal string union key in map', async () => {
+      const res = await b.InOutLiteralStringUnionMapKey({ one: '1' }, { two: '2' })
+      expect(res).toHaveProperty('one', '1')
+      expect(res).toHaveProperty('two', '2')
+    })
+
+    it('single literal string key in map', async () => {
+      const res = await b.InOutSingleLiteralStringMapKey({ key: '1' })
+      expect(res).toHaveProperty('key', '1')
     })
   })
 
@@ -279,6 +297,12 @@ describe('Integ tests', () => {
       expect(msgs[i + 1].startsWith(msgs[i])).toBeTruthy()
     }
     expect(msgs.at(-1)).toEqual(final)
+  })
+
+  it('should allow overriding the region', async () => {
+    await expect(async () => {
+      await b.TestAwsInvalidRegion('Dr. Pepper')
+    }).rejects.toThrow('DispatchFailure')
   })
 
   it('should support OpenAI shorthand', async () => {
@@ -613,7 +637,7 @@ describe('Integ tests', () => {
 
   it('should raise an error when appropriate', async () => {
     await expect(async () => {
-      await b.TestCaching(111 as unknown as string) // intentionally passing an int instead of a string
+      await b.TestCaching(111 as unknown as string, 'fiction') // intentionally passing an int instead of a string
     }).rejects.toThrow('BamlInvalidArgumentError')
 
     await expect(async () => {
@@ -750,17 +774,122 @@ describe('Integ tests', () => {
 
   it('constraints: should handle nested-block-level checks', async () => {
     const res = await b.MakeNestedBlockConstraint()
-    console.log(JSON.stringify(res));
+    console.log(JSON.stringify(res))
     expect(res.nbc.checks.cross_field.status).toBe('succeeded')
   })
-})
 
-interface MyInterface {
-  key: string
-  key_two: boolean
-  key_three: number
-}
+  it('simple recursive type', async () => {
+    const res = await b.BuildLinkedList([1, 2, 3, 4, 5])
+    expect(res).toEqual({
+      head: {
+        data: 1,
+        next: {
+          data: 2,
+          next: {
+            data: 3,
+            next: {
+              data: 4,
+              next: {
+                data: 5,
+                next: null,
+              },
+            },
+          },
+        },
+      },
+      len: 5,
+    })
+  })
 
-afterAll(async () => {
-  flush()
+  it('mutually recursive type', async () => {
+    const res = await b.BuildTree({
+      data: 5,
+      left: {
+        data: 3,
+        left: {
+          data: 1,
+          left: null,
+          right: {
+            data: 2,
+            left: null,
+            right: null,
+          },
+        },
+        right: {
+          data: 4,
+          left: null,
+          right: null,
+        },
+      },
+      right: {
+        data: 7,
+        left: {
+          data: 6,
+          left: null,
+          right: null,
+        },
+        right: {
+          data: 8,
+          left: null,
+          right: null,
+        },
+      },
+    })
+    expect(res).toEqual({
+      data: 5,
+      children: {
+        trees: [
+          {
+            data: 3,
+            children: {
+              trees: [
+                {
+                  data: 1,
+                  children: {
+                    trees: [
+                      {
+                        data: 2,
+                        children: {
+                          trees: [],
+                        },
+                      },
+                    ],
+                  },
+                },
+                {
+                  data: 4,
+                  children: {
+                    trees: [],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            data: 7,
+            children: {
+              trees: [
+                {
+                  data: 6,
+                  children: {
+                    trees: [],
+                  },
+                },
+                {
+                  data: 8,
+                  children: {
+                    trees: [],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    })
+  })
+
+  afterAll(async () => {
+    flush()
+  })
 })

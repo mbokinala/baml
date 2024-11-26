@@ -78,6 +78,8 @@ module Baml
       end
     end
     class EnumOutput < T::Enum
+      # An enum with three values,
+      # ONE, TWO and THREE.
       enums do
         ONE = new("ONE")
         TWO = new("TWO")
@@ -89,6 +91,13 @@ module Baml
         SPORTS = new("SPORTS")
         MUSIC = new("MUSIC")
         READING = new("READING")
+      end
+    end
+    class MapKey < T::Enum
+      enums do
+        A = new("A")
+        B = new("B")
+        C = new("C")
       end
     end
     class NamedArgsSingleEnum < T::Enum
@@ -137,6 +146,7 @@ module Baml
       end
     end
     class BigNumbers < T::Struct; end
+    class BinaryNode < T::Struct; end
     class Blah < T::Struct; end
     class BlockConstraint < T::Struct; end
     class BlockConstraintForParam < T::Struct; end
@@ -160,11 +170,13 @@ module Baml
     class FakeImage < T::Struct; end
     class FlightConfirmation < T::Struct; end
     class FooAny < T::Struct; end
+    class Forest < T::Struct; end
     class GroceryReceipt < T::Struct; end
     class InnerClass < T::Struct; end
     class InnerClass2 < T::Struct; end
     class InputClass < T::Struct; end
     class InputClassNested < T::Struct; end
+    class LinkedList < T::Struct; end
     class LiteralClassHello < T::Struct; end
     class LiteralClassOne < T::Struct; end
     class LiteralClassTwo < T::Struct; end
@@ -176,6 +188,7 @@ module Baml
     class Nested2 < T::Struct; end
     class NestedBlockConstraint < T::Struct; end
     class NestedBlockConstraintForParam < T::Struct; end
+    class Node < T::Struct; end
     class OptionalTest_Prop1 < T::Struct; end
     class OptionalTest_ReturnType < T::Struct; end
     class OrderInfo < T::Struct; end
@@ -197,6 +210,7 @@ module Baml
     class TestClassNested < T::Struct; end
     class TestClassWithEnum < T::Struct; end
     class TestOutputClass < T::Struct; end
+    class Tree < T::Struct; end
     class TwoStoriesOneTitle < T::Struct; end
     class UnionTest_ReturnType < T::Struct; end
     class WithReasoning < T::Struct; end
@@ -209,6 +223,22 @@ module Baml
         super(
           a: props[:a],
           b: props[:b],
+        )
+
+        @props = props
+      end
+    end
+    class BinaryNode < T::Struct
+      include Baml::Sorbet::Struct
+      const :data, Integer
+      const :left, T.nilable(Baml::Types::BinaryNode)
+      const :right, T.nilable(Baml::Types::BinaryNode)
+
+      def initialize(props)
+        super(
+          data: props[:data],
+          left: props[:left],
+          right: props[:right],
         )
 
         @props = props
@@ -552,6 +582,18 @@ module Baml
         @props = props
       end
     end
+    class Forest < T::Struct
+      include Baml::Sorbet::Struct
+      const :trees, T::Array[Baml::Types::Tree]
+
+      def initialize(props)
+        super(
+          trees: props[:trees],
+        )
+
+        @props = props
+      end
+    end
     class GroceryReceipt < T::Struct
       include Baml::Sorbet::Struct
       const :receiptId, String
@@ -628,6 +670,20 @@ module Baml
         @props = props
       end
     end
+    class LinkedList < T::Struct
+      include Baml::Sorbet::Struct
+      const :head, T.nilable(Baml::Types::Node)
+      const :len, Integer
+
+      def initialize(props)
+        super(
+          head: props[:head],
+          len: props[:len],
+        )
+
+        @props = props
+      end
+    end
     class LiteralClassHello < T::Struct
       include Baml::Sorbet::Struct
       const :prop, String
@@ -688,8 +744,12 @@ module Baml
         @props = props
       end
     end
+    # A Martian organism with an age.
+    # Such a nice type.
     class Martian < T::Struct
       include Baml::Sorbet::Struct
+      # The age of the Martian in Mars years.
+      # So many Mars years.
       const :age, Baml::Checked[Integer]
 
       def initialize(props)
@@ -765,6 +825,20 @@ module Baml
       def initialize(props)
         super(
           nbcfp: props[:nbcfp],
+        )
+
+        @props = props
+      end
+    end
+    class Node < T::Struct
+      include Baml::Sorbet::Struct
+      const :data, Integer
+      const :next, T.nilable(Baml::Types::Node)
+
+      def initialize(props)
+        super(
+          data: props[:data],
+          next: props[:next],
         )
 
         @props = props
@@ -1091,6 +1165,20 @@ module Baml
         super(
           prop1: props[:prop1],
           prop2: props[:prop2],
+        )
+
+        @props = props
+      end
+    end
+    class Tree < T::Struct
+      include Baml::Sorbet::Struct
+      const :data, Integer
+      const :children, Baml::Types::Forest
+
+      def initialize(props)
+        super(
+          data: props[:data],
+          children: props[:children],
         )
 
         @props = props

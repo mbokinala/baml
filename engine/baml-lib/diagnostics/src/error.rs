@@ -346,7 +346,7 @@ impl DatamodelError {
     }
 
     pub fn new_field_validation_error(
-        message: &str,
+        message: String,
         container_type: &str,
         container_name: &str,
         field: &str,
@@ -592,6 +592,13 @@ impl DatamodelError {
             "Property {property_name} in {config_kind} {config_name} needs to be assigned a value"
         );
         Self::new(msg, span)
+    }
+
+    pub fn new_type_not_allowed_as_map_key_error(span: Span) -> DatamodelError {
+        Self::new_validation_error(
+            "Maps may only have strings, enums or literal strings as keys",
+            span,
+        )
     }
 
     pub fn span(&self) -> &Span {

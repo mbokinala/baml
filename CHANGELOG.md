@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.68.0](https://github.com/boundaryml/baml/compare/0.67.0..0.68.0) - 2024-11-11
+
+### Documentation
+
+
+### Features
+
+- Recursive types! (#1065) - ([8100df9](https://github.com/boundaryml/baml/commit/8100df999e67690458e8bc6adc50575e855bd242)) - Antonio Sarosi
+- Support specifying "region" for aws-bedrock (#1150) - ([cbe3c92](https://github.com/boundaryml/baml/commit/cbe3c9261b3fa5cd026b9492a2858c1822e354df)) - Samuel Lijin
+- Add `hoisted_class_prefix` option in docs (#1154) - ([cf2298e](https://github.com/boundaryml/baml/commit/cf2298ec53c74c317c495c7b84e1a56a97193b4f)) - Antonio Sarosi
+- Make render messages dynamic and use `hoisted_class_prefix` instead of `"schema"` (#1155) - ([873751b](https://github.com/boundaryml/baml/commit/873751ba84f736dfbcbd9cbb0b6debfe7081cc1f)) - Antonio Sarosi
+- Support o1 in playground (allow certain models to disable streaming) (#1157) - ([09c6549](https://github.com/boundaryml/baml/commit/09c65497c3218387756775827ba22bcad16f0362)) - hellovai
+- Add basic grammar for `a` vs `an` articles in ctx.output_format (#1158) - ([e084130](https://github.com/boundaryml/baml/commit/e0841307d4da809754d995a4524b39b87040f2d0)) - Antonio Sarosi
+
+
+### Bug Fixes
+- Improved syntax highlighting for template_strings (#1151) - ([8c43e37](https://github.com/boundaryml/baml/commit/8c43e37fdaa05d9f3626fde7ad56614610727348)) - Greg Hale
+- Improved error detection for client&lt;llm&gt; parsing (#1026) - ([c6b1167](https://github.com/boundaryml/baml/commit/c6b116744f55f831352209c04cd6bce7b028eda9)) - hellovai
+- Fix BAML_LOG_JSON logs for py, ruby, and TS (#1153) - ([9e08642](https://github.com/boundaryml/baml/commit/9e08642470435fbefca20b163de010dd805560b8)) - aaronvg
+
+
+## [0.67.0](https://github.com/boundaryml/baml/compare/0.66.0..0.67.0) - 2024-11-05
+
+### Bug Fixes
+- URGENT: fix generated typescript code (#1147) - ([bd9da16](https://github.com/boundaryml/baml/commit/bd9da1683112d849595580866382cba2c6bed8be)) - hellovai
+
+
+### Features
+- Parser improvement: handle code within backticks (`) (#1146) - ([3d8ef34](https://github.com/boundaryml/baml/commit/3d8ef34af15a7f2b957876ffa71314ce38da2a01)) - hellovai
+
 ## [0.66.0](https://github.com/boundaryml/baml/compare/0.65.0..0.66.0) - 2024-11-04
 
 ### Features

@@ -102,7 +102,10 @@ fn test_ifexpr() {
 
     assert_eq!(
         assert_evaluates_to!("1 if true else '2'", &types),
-        Type::Union(vec![Type::Literal(LiteralValue::String("2".to_string())), Type::Literal(LiteralValue::Int(1))])
+        Type::Union(vec![
+            Type::Literal(LiteralValue::String("2".to_string())),
+            Type::Literal(LiteralValue::Int(1))
+        ])
     );
 
     assert_eq!(
@@ -165,7 +168,9 @@ fn test_call_function() {
 
     assert_eq!(
         assert_fails_to!("AnotherFunc(arg='true', arg2='1')", &types),
-        vec![r#"Function 'AnotherFunc' expects argument 'arg' to be of type bool, but got literal["true"]"#]
+        vec![
+            r#"Function 'AnotherFunc' expects argument 'arg' to be of type bool, but got literal["true"]"#
+        ]
     );
 
     assert_eq!(
@@ -212,21 +217,19 @@ fn test_call_function() {
     types.add_function(
         "TakesLiteralFoo",
         Type::Float,
-        vec![
-            ("arg".to_string(),
-                Type::Union(vec![
-                    Type::Literal(LiteralValue::String("Foo".to_string())),
-                    Type::Literal(LiteralValue::String("Bar".to_string()))
-                ])
-            )
-        ]
+        vec![(
+            "arg".to_string(),
+            Type::Union(vec![
+                Type::Literal(LiteralValue::String("Foo".to_string())),
+                Type::Literal(LiteralValue::String("Bar".to_string())),
+            ]),
+        )],
     );
 
     assert_eq!(
         assert_evaluates_to!("TakesLiteralFoo('Foo')", &types),
         Type::Float
     );
-
 }
 
 #[test]
@@ -259,7 +262,40 @@ fn test_output_format() {
     );
 
     assert_eq!(
+        assert_fails_to!(
+            "ctx.output_format(prefix='1', hoisted_class_prefix=1)",
+            &types
+        ),
+        vec!["Function 'baml::OutputFormat' expects argument 'hoisted_class_prefix' to be of type (none | string), but got literal[1]"]
+    );
+
+    assert_eq!(
         assert_fails_to!("ctx.output_format(prefix='1', unknown=1)", &types),
         vec!["Function 'baml::OutputFormat' does not have an argument 'unknown'. Did you mean one of these: 'always_hoist_enums', 'enum_value_prefix', 'or_splitter'?"]
+    );
+}
+
+
+#[test]
+fn sum_filter() {
+    let types = PredefinedTypes::default(JinjaContext::Prompt);
+    assert_eq!(
+        assert_evaluates_to!(r#"[1,2,3]|sum"#, types),
+        Type::Int
+    );
+    assert_eq!(
+        assert_evaluates_to!(r#"[1.1,2.1,3.2]|sum"#, types),
+        Type::Float
+    );
+    // // This would be nice, but it doesn't work.
+    // // Type checker says this is a subtype of `int[]`.
+    // // BUG.
+    // assert_eq!(
+    //     assert_evaluates_to!(r#"[1.1,2,3]|sum"#, types),
+    //     Type::Float
+    // );
+    assert_eq!(
+        assert_fails_to!(r#"["hi", 1]|sum"#, types),
+        vec![r#"'[hi,1]' is a list[(literal["hi"] | literal[1])], expected (int|float)[]"#]
     );
 }

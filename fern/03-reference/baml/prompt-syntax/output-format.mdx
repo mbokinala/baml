@@ -71,7 +71,8 @@ BAML's default prefix varies based on the function's return type.
 | Fuction return type | Default Prefix |
 | --- | --- |
 | Primitive (String) |  |
-| Primitive (Other) | `Answer as a: ` |
+| Primitive (Int) | `Answer as an ` |
+| Primitive (Other) | `Answer as a ` |
 | Enum | `Answer with any of the categories:\n` |
 | Class | `Answer in JSON using this schema:\n` |
 | List | `Answer with a JSON Array using this schema:\n` |
@@ -121,6 +122,75 @@ If a type is a union like `string | int` or an optional like `string?`, this ind
 BAML renders it as `property: string or null` as we have observed some LLMs have trouble identifying what `property: string | null` means (and are better with plain english).
 
 You can always set it to ` | ` or something else for a specific model you use.
+</ParamField>
+
+<ParamField path="hoisted_class_prefix" type="string"> 
+Prefix of hoisted classes in the prompt. **Default: `<none>`**
+
+Recursive classes are hoisted in the prompt so that any class field can
+reference them using their name. This parameter controls the prefix used for
+hoisted classes as well as the word used in the render message to refer to the
+output type, which defaults to `"schema"`:
+
+```
+Answer in JSON using this schema:
+```
+
+See examples below.
+
+**Recursive BAML Prompt Example**
+
+```baml
+class Node {
+  data int
+  next Node?
+}
+
+class LinkedList {
+  head Node?
+  len int
+}
+
+function BuildLinkedList(input: int[]) -> LinkedList {
+  prompt #"
+    Build a linked list from the input array of integers.
+
+    INPUT: {{ input }}
+
+    {{ ctx.output_format }}    
+  "#
+}
+```
+
+**Default `hoisted_class_prefix` (none)**
+
+```
+Node {
+  data: int,
+  next: Node or null
+}
+
+Answer in JSON using this schema:
+{
+  head: Node or null,
+  len: int
+}
+```
+
+**Custom Prefix: `hoisted_class_prefix="interface"`**
+
+```
+interface Node {
+  data: int,
+  next: Node or null
+}
+
+Answer in JSON using this interface:
+{
+  head: Node or null,
+  len: int
+}
+```
 </ParamField>
 
 ## Why BAML doesn't use JSON schema format in prompts
